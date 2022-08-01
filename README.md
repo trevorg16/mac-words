@@ -28,7 +28,7 @@ Repeat this for all .cc and .hh files.
 Place all Mac-formatted .cc and .hh files along with the macwords.r DeRez
 resource file onto the classic Mac in a folder called `macwords`.
 Then, use MPW to set the directory to the newly-created `macwords` folder.
-Create new build commands names macwords including all .cc and .r files as
+Create new build commands named macwords including all .cc and .r files as
 source. 
 Include the macwords folder as a search path (this should be :, the root). 
 Choose to build a Mac OS application for PPC Classic or 32 bit 68k or both.
