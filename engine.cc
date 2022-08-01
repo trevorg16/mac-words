@@ -159,7 +159,6 @@ BOOL Engine::gameDone()
 
 void Engine::alphabetAdd(char letter, letterScore score)
 {
-	printf("set letter %c to %d\n", letter, score);
 	if (score > alphabet[letter - 'A'])
 	{
 		alphabet[letter - 'A'] = score;
@@ -183,7 +182,6 @@ BOOL Engine::checkWord(char* word)
 	
 	// Then, check the two auxilliary lists
 	int cmpRes = strncmp(word, splitWord, WORD_LENGTH);
-	printf("Comparing word %s to splitword %s results in: %d\n", word, splitWord, cmpRes);
 	
 	if (cmpRes < 0)
 	{
@@ -214,15 +212,12 @@ BOOL Engine::binSearch(int start, int end, char* wordList, char* word)
 		for (int i = start; i < end; i++)
 		{
 			int res = memcmp(word, wordList + (i * (WORD_LENGTH + 1)), WORD_LENGTH);
+
 			if(res == 0)
 			{
 				found = TRUE;
 				break;
 			}			
-		}
-		if (!found)
-		{
-			printf("Could not find word %s\n", word);
 		}
 	}
 	else

@@ -83,7 +83,6 @@ void Board::draw_board()
 			unsigned char numMissingKeys = max_key_rect_len - key_rect_len[row];
 			r.left = spacerWidth + (spacerWidth + buttonWidth) * col + ((spacerWidth + buttonWidth) / 2) * numMissingKeys;
 			r.right = r.left + buttonWidth;
-			//FillCRect(&r, lightGreyPixPat);
 			
 			key_rects[row][col] = r;
 			char l = keyboard[row][col];
