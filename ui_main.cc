@@ -428,7 +428,7 @@ void drawAboutWindow(WindowPtr window)
 	
 	DrawString(writeString);
 	
-	c2pstrcpy_cust(writeString, " v1.0.0");
+	c2pstrcpy_cust(writeString, " v1.0.1");
 	
 	DrawString(writeString);
 	

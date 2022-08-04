@@ -98,8 +98,6 @@ BOOL Engine::makeGuess(char* word)
 	{
 		return FALSE;
 	}
-
-	printf("Guess: %s, selected: %s\n", word, selectedWord);
 	
 	BOOL letterScore[WORD_LENGTH] = {FALSE};
 	
@@ -127,12 +125,13 @@ BOOL Engine::makeGuess(char* word)
 	// Wrong position but correct guess
 	for (i = 0; i < WORD_LENGTH; i++)
 	{
-		char* foundLoc = strchr(selectedWord, word[i]);
-
-		if (foundLoc && letterScore[foundLoc - selectedWord] == FALSE)
+		for (int j = 0; j < WORD_LENGTH; j++)
 		{
-			scores[numGuesses][i] = WrongPos;
-			letterScore[foundLoc - selectedWord] = TRUE;
+			if (word[i] == selectedWord[j] && !letterScore[j] && scores[numGuesses][i] == NoMatch)
+			{
+				scores[numGuesses][i] = WrongPos;
+				letterScore[j] = TRUE;
+			}
 		}
 	}
 	
