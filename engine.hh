@@ -11,11 +11,11 @@
  * of the License, or (at your option) any later version.
  *
  * MacWords is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
- * even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the 
+ * even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License along with MacWords. If not,
- * see <https://www.gnu.org/licenses/>. 
+ * see <https://www.gnu.org/licenses/>.
  */
 
 #include <MacTypes.h>
@@ -46,19 +46,19 @@ class Engine
 {
 public:
 	Engine();
-	
+
 	void alphabetPrint();
-	
+
 	BOOL makeGuess(char* word);
-	
+
 	BOOL hasWon();
-	
+
 	BOOL gameDone();
-	
+
 	char* getSelectedWord();
-	
+
 	void newGame();
-	
+
 	int numGuesses;
 	char guesses[NUM_OF_GUESSES][WORD_LENGTH];
 	letterScore scores[NUM_OF_GUESSES][WORD_LENGTH];
@@ -66,16 +66,16 @@ public:
 private:
 	void alphabetAdd(char letter, letterScore score);
 	void getWord(int num, char* words, char* ret);
-	
+
 	BOOL checkWord(char* word);
-	
+
 	BOOL binSearch(int start, int end, char* wordList, char* word);
 
 	char selectedWord[WORD_LENGTH + 1];
 	char splitWord[WORD_LENGTH + 1];
-	
+
 	int numCorrectLetters;
-	
+
 	Handle dailyWords;
 	Handle allWords_a;
 	Handle allWords_b;

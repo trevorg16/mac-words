@@ -8,11 +8,11 @@
  * of the License, or (at your option) any later version.
  *
  * MacWords is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
- * even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the 
+ * even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License along with MacWords. If not,
- * see <https://www.gnu.org/licenses/>. 
+ * see <https://www.gnu.org/licenses/>.
  */
 
 #include "engine.hh"
@@ -26,32 +26,32 @@
 Engine::Engine()
 {
 	dailyWords = GetResource('TEXT', 128);
-	
+
 	if (dailyWords == NULL)
 	{
 		SysBeep(1);
 	}
-	
+
 	allWords_a = GetResource('TEXT', 129);
-	
+
 	if (allWords_a == NULL)
 	{
 		SysBeep(1);
 	}
-	
+
 	allWords_b = GetResource('TEXT', 130);
-	
+
 	if (allWords_b == NULL)
 	{
 		SysBeep(1);
 	}
-	
+
 	if (allWords_b != NULL)
 	{
 		memcpy(splitWord, *allWords_b, WORD_LENGTH);
 		splitWord[WORD_LENGTH] = '\0';
 	}
-	
+
 	newGame();
 }
 
@@ -63,12 +63,12 @@ char* Engine::getSelectedWord()
 void Engine::newGame()
 {
 	*selectedWord = '\0';
-	
+
 	for (int i = 0; i < ALPHABET_LENGTH; i++)
 	{
 		alphabet[i] = Unknown;
 	}
-	
+
 	numGuesses = 0;
 	numCorrectLetters = 0;
 
@@ -76,7 +76,7 @@ void Engine::newGame()
 	int randWordNum;
 	randWordNum = Random() + -RAND_MIN;
 	randWordNum = randWordNum % NUM_DAILY_WORDS;
-	
+
 	HLock(dailyWords);
 	getWord(randWordNum, *dailyWords, selectedWord);
 	HUnlock(dailyWords);
@@ -98,11 +98,11 @@ BOOL Engine::makeGuess(char* word)
 	{
 		return FALSE;
 	}
-	
+
 	BOOL letterScore[WORD_LENGTH] = {FALSE};
-	
+
 	numCorrectLetters = 0;
-	
+
 	int i;
 
 	// Default to NoMatch
@@ -134,13 +134,13 @@ BOOL Engine::makeGuess(char* word)
 			}
 		}
 	}
-	
+
 	for (i = 0; i < WORD_LENGTH; i++)
 	{
 		alphabetAdd(word[i], scores[numGuesses][i]);
 		guesses[numGuesses][i] = word[i];
 	}
-	
+
 	numGuesses++;
 
 	return TRUE;
@@ -167,21 +167,21 @@ void Engine::alphabetAdd(char letter, letterScore score)
 BOOL Engine::checkWord(char* word)
 {
 	BOOL retVal = FALSE;
-	
+
 	// First, always check the list of daily words
-	
+
 	HLock(dailyWords);
 	retVal = binSearch(0, NUM_DAILY_WORDS, *dailyWords, word);
 	HUnlock(dailyWords);
-	
+
 	if (retVal)
 	{
 		return retVal;
 	}
-	
+
 	// Then, check the two auxilliary lists
 	int cmpRes = strncmp(word, splitWord, WORD_LENGTH);
-	
+
 	if (cmpRes < 0)
 	{
 		HLock(allWords_a);
@@ -198,7 +198,7 @@ BOOL Engine::checkWord(char* word)
 	{
 		retVal = TRUE;
 	}
-	
+
 	return retVal;
 }
 
@@ -216,17 +216,17 @@ BOOL Engine::binSearch(int start, int end, char* wordList, char* word)
 			{
 				found = TRUE;
 				break;
-			}			
+			}
 		}
 	}
 	else
 	{
-	
+
 		// Recorsive case, choose a midpoint and test it
 		int mid = ((end - start) / 2) + start;
-	
+
 		int cmpRes = memcmp(word, wordList + (mid * (WORD_LENGTH + 1)), WORD_LENGTH);
-	
+
 		if (cmpRes == 0)
 		{
 			found = TRUE;
@@ -242,7 +242,7 @@ BOOL Engine::binSearch(int start, int end, char* wordList, char* word)
 			found = binSearch(mid, end, wordList, word);
 		}
 	}
-	
+
 	return found;
 }
 

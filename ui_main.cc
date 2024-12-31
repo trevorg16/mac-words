@@ -8,11 +8,11 @@
  * of the License, or (at your option) any later version.
  *
  * MacWords is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
- * even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the 
+ * even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License along with MacWords. If not,
- * see <https://www.gnu.org/licenses/>. 
+ * see <https://www.gnu.org/licenses/>.
  */
 
 #include <MacWindows.h>
@@ -51,11 +51,14 @@ static const short gameMenuClose = 2;
 QDGlobals qd;
 #endif
 
+short minHeight = 0;
+short minWidth = 0;
+
 void initialize();
 void mainLoop();
 void terminate();
 void processMouseMenuEvent(long action);
-void processKeyMenyEvent(char key);
+void processKeyMenuEvent(char key);
 void beginGame();
 void newGame(WindowPtr window);
 void clearEntry(WindowPtr window);
@@ -84,7 +87,7 @@ void initialize()
 	InitMenus();
 	InitDialogs(nil);
 	InitCursor();
-	
+
 	aboutWindowOpen = FALSE;
 
 	FlushEvents(everyEvent, 0);
@@ -114,7 +117,37 @@ void mainLoop()
 				else if (clickedPort == inDrag)
 				{
 					SelectWindow(clickedWindow);
-					DragWindow(clickedWindow, event.where, &qd.screenBits.bounds);					
+					DragWindow(clickedWindow, event.where, &qd.screenBits.bounds);
+				}
+				else if (clickedPort == inGrow)
+				{
+					Rect r = {0};
+					r.top = minHeight;
+					r.bottom = 32767;
+					r.left = minWidth;
+					r.right = 32767;
+
+					long newSize = GrowWindow(clickedWindow, event.where, &r);
+					printf("inGrow. window %x becomes %lx\n", clickedWindow, newSize);
+
+					Board* b = (Board*) GetWRefCon((WindowPtr) clickedWindow);
+
+					BOOL canResize = b->canCreateGWorld(LoWord(newSize), HiWord(newSize));
+
+					if (newSize && canResize)
+					{
+						SetPort(clickedWindow);
+
+						// could try to resize here or calculate if memory is sufficient
+
+						SizeWindow(clickedWindow, LoWord(newSize), HiWord(newSize), false);
+						InvalRect(&clickedWindow->portRect);
+						b->resized();
+					}
+					else
+					{
+						SysBeep(1);
+					}
 				}
 				else if (clickedPort == inGoAway) {
 					if (TrackGoAway(clickedWindow, event.where)) {
@@ -135,13 +168,13 @@ void mainLoop()
 						if(clickedWindow)
 						{
 							Board* b = (Board*) GetWRefCon((WindowPtr) clickedWindow);
-						
+
 							if (b == 0)
 							{
 								// Close the About Window on click
 								closeAboutWinow(clickedWindow);
 							}
-						
+
 							// Process the click event
 						}
 					}
@@ -149,6 +182,7 @@ void mainLoop()
 			}
 			else if (event.what == updateEvt)
 			{
+				printf("Doing an update event!!!!\n");
 				BeginUpdate((WindowPtr) event.message);
 				Board* b = (Board*) GetWRefCon((WindowPtr) event.message);
 				if (b == 0)
@@ -157,21 +191,25 @@ void mainLoop()
 				}
 				else if(b->type == BoardWindow)
 				{
+					RgnHandle rgn = NewRgn();
+					//GetWindowRegion((WindowPtr) event.message, kWindowUpdateRgn, rgn);
+					printf("The update region appears to be %x\n", rgn);
 					b->draw();
+					DisposeRgn(rgn);
 				}
 				else if(b->type == ScoreWindow)
 				{
 					Score* s = (Score*)b;
 					s->draw();
 				}
-				
+
 				EndUpdate((WindowPtr) event.message);
 			}
 			else if (event.what == keyDown)
 			{
 				if(((event.modifiers & cmdKey) != 0))
 				{
-					processKeyMenyEvent(tolower(LoWord(event.message)));
+					processKeyMenuEvent(tolower(LoWord(event.message)));
 				}
 				else
 				{
@@ -263,7 +301,7 @@ void processMouseMenuEvent(long action)
 }
 
 
-void processKeyMenyEvent(char key)
+void processKeyMenuEvent(char key)
 {
 	if (key == 'q')
 	{
@@ -312,12 +350,12 @@ void newGame(WindowPtr window)
 	{
 		return;
 	}
-	
+
 	if(board->type != BoardWindow)
 	{
 		return;
 	}
-	
+
 	board->newGame();
 	board->draw();
 }
@@ -339,7 +377,7 @@ void clearEntry(WindowPtr window)
 	{
 		return;
 	}
-	
+
 	board->clear();
 	board->draw();
 }
@@ -347,6 +385,7 @@ void clearEntry(WindowPtr window)
 void beginGame()
 {
 	WindowPtr window = GetNewCWindow(mainWindow, nil, (WindowPtr) -1);
+	DrawGrowIcon(window);
 	Str255 title;
 	c2pstrcpy_cust(title, programName);
 	SetWTitle(window, title);
@@ -354,7 +393,7 @@ void beginGame()
 	Board* board = new Board(window);
 	SetWRefCon(window, (long) board);
 	SelectWindow(window);
-	
+
 	board->draw();
 }
 
@@ -367,7 +406,7 @@ WindowPtr createAboutWindow()
 
 	WindowPtr window = GetNewCWindow(aboutWindow, nil, (WindowPtr) -1);
 	SetWRefCon(window, (long) 0);
-	
+
 	aboutWindowOpen = TRUE;
 
 	return window;
@@ -381,7 +420,7 @@ void drawAboutWindow(WindowPtr window)
 	}
 
 	SetPort(window);
-	
+
 	RGBColor green;
 	green.red = 93 << 8;
 	green.green = 170 << 8;
@@ -389,29 +428,29 @@ void drawAboutWindow(WindowPtr window)
 
 	PixPatHandle greenPixPat = NewPixPat();
 	MakeRGBPat(greenPixPat, &green);
-	
+
 	Rect r = window->portRect;
-	
+
 	FillCRect(&r, greenPixPat);
-	
+
 	RGBColor white;
 	white.red = 255 << 8;
 	white.green = 255 << 8;
 	white.blue = 255 << 8;
-	
+
 	RGBForeColor(&white);
-	
+
 	short fontSize = 18;
 	PenState oldState;
 	GetPenState(&oldState);
-	
+
 	Style s = {0};
 	Str255 fontName;
-	
+
 	short fontFamily = 0;
 	c2pstrcpy_cust(fontName, "geneva");
 	GetFNum(fontName, &fontFamily);
-	
+
 	TextFont(fontFamily);
 	TextSize(fontSize);
 
@@ -420,39 +459,39 @@ void drawAboutWindow(WindowPtr window)
 	ps.pnLoc.h = window->portRect.left + 5;
 	ps.pnSize.v = 1;
 	ps.pnSize.h = 1;
-	
+
 	SetPenState(&ps);
-	
+
 	Str255 writeString;
 	c2pstrcpy_cust(writeString, programName);
-	
+
 	DrawString(writeString);
-	
-	c2pstrcpy_cust(writeString, " v1.0.1");
-	
+
+	c2pstrcpy_cust(writeString, " v1.2.0");
+
 	DrawString(writeString);
-	
+
 	fontSize = 14;
 	TextSize(fontSize);
-	
+
 	ps.pnLoc.v = ((window->portRect.bottom - window->portRect.top) / 2) + window->portRect.top;
 	ps.pnLoc.h = window->portRect.left + 5;
-	
+
 	SetPenState(&ps);
-	
-	c2pstrcpy_cust(writeString, "Copyright 2022 Trevor Gale");
-	
+
+	c2pstrcpy_cust(writeString, "Copyright 2024 Trevor Gale");
+
 	DrawString(writeString);
-	
+
 	c2pstrcpy_cust(writeString, "under the GNU GPL");
-	
+
 	ps.pnLoc.v += 16;
 	ps.pnLoc.h = window->portRect.left + 5;
-	
+
 	SetPenState(&ps);
-	
+
 	DrawString(writeString);
-	
+
 	DisposePixPat(greenPixPat);
 }
 
@@ -462,7 +501,7 @@ void closeAboutWinow(WindowPtr window)
 	{
 		return;
 	}
-	
+
 	DisposeWindow(window);
 	aboutWindowOpen = FALSE;
 }

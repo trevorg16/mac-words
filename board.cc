@@ -8,15 +8,16 @@
  * of the License, or (at your option) any later version.
  *
  * MacWords is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
- * even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the 
+ * even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License along with MacWords. If not,
- * see <https://www.gnu.org/licenses/>. 
+ * see <https://www.gnu.org/licenses/>.
  */
 
 #include "board.hh"
 #include <Quickdraw.h>
+#include <QDOffscreen.h>
 #include <string.h>
 #include <stdio.h>
 #include <Sound.h>
@@ -43,7 +44,10 @@ Board::Board(WindowPtr w)
 	boardFontSize = 0;
 	keyboardFontSize = 0;
 
+	offscreenWorld = NULL;
+
 	init();
+	clear();
 }
 
 BOOL Board::equalPortRect(Rect cmp)
@@ -59,20 +63,49 @@ Board::~Board()
 	cleanup();
 }
 
+Rect Board::calculateVisibleRect(Rect r)
+{
+	r.right -= 16;
+	r.bottom -= 16;
+	return r;
+}
+
+// Always draw the whole board in the offscreen GWorld
 void Board::draw_board()
 {
-	BOOL isNewPortRect = !equalPortRect(window->portRect);
-	boardSizeUpdated = isNewPortRect;
-	keyboardSizeUpdated = isNewPortRect;
-	short winWidth = window->portRect.right - window->portRect.left;
-	
+	CGrafPtr origPort;
+	GDHandle origDev;
+
+	GetGWorld(&origPort, &origDev);
+
+	Rect contentRect = calculateVisibleRect(window->portRect);
+
+	BOOL isNewPortRect = !equalPortRect(contentRect);
+
+	if (isNewPortRect) {
+		isNewPortRect = updateGWorld(&contentRect);
+	}
+
+	if (isNewPortRect) {
+		boardSizeUpdated = isNewPortRect;
+		keyboardSizeUpdated = isNewPortRect;
+	}
+
+	contentRect = offscreenWorld->portRect;
+	if (offscreenWorld) {
+		SetGWorld(offscreenWorld, NULL);
+		EraseRect(&offscreenWorld->portRect);
+	}
+
+	short winWidth = contentRect.right - contentRect.left;
+
 	float buttonWidth = ((float)winWidth) / (((float)max_key_rect_len) + 1);
 	float spacerWidth = buttonWidth / (max_key_rect_len + 1);
-	
+
 	// Calculate space from the bottom
-	
-	short vertOffset = (window->portRect.bottom - window->portRect.top) - ((KEYBOARD_NUM_ROWS * (buttonWidth + spacerWidth) + spacerWidth));
-	
+
+	short vertOffset = (contentRect.bottom - contentRect.top) - ((KEYBOARD_NUM_ROWS * (buttonWidth + spacerWidth) + spacerWidth));
+
 	for (int row = 0; row < KEYBOARD_NUM_ROWS; row++)
 	{
 		for ( int col = 0; col < key_rect_len[row]; col++)
@@ -83,10 +116,10 @@ void Board::draw_board()
 			unsigned char numMissingKeys = max_key_rect_len - key_rect_len[row];
 			r.left = spacerWidth + (spacerWidth + buttonWidth) * col + ((spacerWidth + buttonWidth) / 2) * numMissingKeys;
 			r.right = r.left + buttonWidth;
-			
+
 			key_rects[row][col] = r;
 			char l = keyboard[row][col];
-			
+
 			if ( l == '\n' )
 			{
 				FillCRoundRect(&r, ROUND_RECT_SZ, ROUND_RECT_SZ, lightGreyPixPat);
@@ -117,18 +150,18 @@ void Board::draw_board()
 					FillCRoundRect(&r, ROUND_RECT_SZ, ROUND_RECT_SZ, greenPixPat);
 				}
 			}
-			
+
 			draw_letter(l, r, &keyboardFontSize, &keyboardSizeUpdated);
 		}
 	}
-	
+
 	float boardWidthCalc = (float)winWidth / ((float)WORD_LENGTH + 1.0);
 	float boardHeightCalc = (float)vertOffset / ((float)NUM_OF_GUESSES + 1.0);
 	float boardButtonWidth = MIN(boardWidthCalc, boardHeightCalc);
 	float boardSpacerWidth = boardButtonWidth / (WORD_LENGTH + 1);
-	
+
 	float boardEmptySpace = winWidth - WORD_LENGTH * (boardButtonWidth + boardSpacerWidth);
-	
+
 	// Draw the game board
 	for (int boardRow = 0; boardRow < NUM_OF_GUESSES; boardRow++)
 	{
@@ -136,7 +169,7 @@ void Board::draw_board()
 		{
 			char letter = '\0';
 			PixPatHandle color = nil;
-			
+
 			if (boardCol < curGuessLen && boardRow == engine.numGuesses)
 			{
 				letter = curGuess[boardCol];
@@ -144,9 +177,9 @@ void Board::draw_board()
 			else if (boardRow < engine.numGuesses )
 			{
 				letter = engine.guesses[boardRow][boardCol];
-				
+
 				letterScore score = engine.scores[boardRow][boardCol];
-				
+
 				if ( score == NoMatch)
 				{
 					color = greyPixPat;
@@ -160,13 +193,13 @@ void Board::draw_board()
 					color = greenPixPat;
 				}
 			}
-			
+
 			Rect r;
 			r.top = boardSpacerWidth + (boardButtonWidth + boardSpacerWidth) * boardRow;
 			r.bottom = r.top + boardButtonWidth;
 			r.left = boardSpacerWidth + (boardButtonWidth + boardSpacerWidth) * boardCol + (boardEmptySpace / 2.0);
 			r.right = r.left + boardButtonWidth;
-			
+
 			if (color != nil)
 			{
 				FillCRect(&r, color);
@@ -183,6 +216,79 @@ void Board::draw_board()
 			}
 		}
 	}
+
+	lastPortRect = contentRect;
+	SetGWorld(origPort, origDev);
+}
+
+void Board::resized()
+{
+	redraw = TRUE;
+}
+
+BOOL Board::canCreateGWorld(short width, short numRows)
+{
+	// Assume the existing GWorld's space can be reclaimed
+	Size existingSpace = 0;
+	if (offscreenWorld) {
+		existingSpace = GetHandleSize((Handle)offscreenWorld->portPixMap);
+	}
+
+	PixMapHandle pixMap = ((CGrafPtr) window)->portPixMap;
+	HLock((Handle)pixMap);
+	short pixelSize = (*pixMap)->pixelSize;
+	HUnlock((Handle)pixMap);
+
+	int spaceNeeded = (( ( (width * (pixelSize / 8)) + 15) / 16) * 16) * numRows;
+
+	Size maxGrow;
+	MaxMem(&maxGrow);
+	Size free = CompactMem(spaceNeeded);
+
+	Size avail = free + existingSpace;
+
+	return avail > spaceNeeded;
+}
+
+BOOL Board::updateGWorld(const Rect* updateRect)
+{
+	if (offscreenWorld) {
+		DisposeGWorld(offscreenWorld);
+		offscreenWorld = NULL;
+	}
+
+	//const Rect* windowRect = &(window->portRect);
+
+	PixMapHandle pixMap = ((CGrafPtr) window)->portPixMap;
+	HLock((Handle)pixMap);
+	short pixelSize = (*pixMap)->pixelSize;
+	HUnlock((Handle)pixMap);
+
+	short numRows = updateRect->bottom - updateRect->top;
+	short width = updateRect->right - updateRect->left;
+
+	int spaceNeeded = (( ( (width * (pixelSize / 8)) + 15) / 16) * 16) * numRows;
+
+	Size maxGrow;
+	MaxMem(&maxGrow);
+	Size free = CompactMem(spaceNeeded);
+
+	printf("free: %d spaceNeeded %d\n", free, spaceNeeded);
+
+	if (spaceNeeded > free) {
+		return FALSE;
+		// Go back to the last working size
+	}
+
+	QDErr newWorldErr = NewGWorld(&offscreenWorld, 0, updateRect, NULL, NULL, 0);
+
+	if (newWorldErr != noErr) {
+		printf("Failed to UpdateGWorld with err: %d\n", newWorldErr);
+		ExitToShell();
+		return FALSE;
+	}
+
+	return TRUE;
 }
 
 void Board::draw_letter(char letter, Rect r, short* fontSize, BOOL* updateFontSize)
@@ -196,7 +302,7 @@ void Board::draw_letter(char letter, Rect r, short* fontSize, BOOL* updateFontSi
 
 		Style s = 0;
 		Str255 fontName;
-				
+
 		// Use the courier monospace font
 		short fontFamily = 0;
 		c2pstrcpy_cust(fontName, "courier");
@@ -206,25 +312,25 @@ void Board::draw_letter(char letter, Rect r, short* fontSize, BOOL* updateFontSi
 		{
 			TextSize(fontSizes[i]);
 			*fontSize = fontSizes[i];
-		
+
 			CharParameter testLetter = 'A';
 			short charWidth = CharWidth(testLetter);
-		
+
 			FontInfo testInfo;
 			GetFontInfo(&testInfo);
-		
+
 			if ( charWidth < (r.right - r.left) && ((testInfo.ascent + testInfo.descent) <= (r.bottom - r.top)))
 			{
 				break;
 			}
 		}
-	
+
 		*updateFontSize = FALSE;
 	}
 	else
 	{
 		Str255 fontName;
-				
+
 		// Use the courier monospace font
 		short fontFamily = 0;
 		c2pstrcpy_cust(fontName, "courier");
@@ -233,7 +339,7 @@ void Board::draw_letter(char letter, Rect r, short* fontSize, BOOL* updateFontSi
 
 		TextSize(*fontSize);
 	}
-	
+
 	CharParameter ch = letter;
 	short space = ((r.right - r.left) - CharWidth(ch)) / 2;
 	FontInfo info;
@@ -254,8 +360,26 @@ void Board::draw_letter(char letter, Rect r, short* fontSize, BOOL* updateFontSi
 void Board::draw()
 {
 	SetPort(window);
+
+	if (redraw)
+	{
+		draw_board();
+		redraw = FALSE;
+	}
+
+	Rect contentRect = calculateVisibleRect(window->portRect);
+
+	CWindowPtr cWindow = (CWindowPtr)window;
+
 	EraseRect(&window->portRect);
-	draw_board();
+	DrawGrowIcon(window);
+	CopyBits((BitMap *)*(offscreenWorld->portPixMap),
+				(BitMap *)*(cWindow->portPixMap),
+				&offscreenWorld->portRect,
+				&contentRect,
+				srcCopy,
+				NULL);
+	printf("DrawGrowWindow\n");
 }
 
 void Board::process_key(char key)
@@ -276,7 +400,7 @@ void Board::process_key(char key)
 			if (isValid)
 			{
 				curGuessLen = 0;
-				
+
 				// Check if the game is now won
 				if (engine.hasWon())
 				{
@@ -296,6 +420,7 @@ void Board::process_key(char key)
 		{
 			SysBeep(1);
 		}
+		redraw = TRUE;
 	}
 	else if ( key == '\b')
 	{
@@ -308,11 +433,13 @@ void Board::process_key(char key)
 		{
 			SysBeep(1);
 		}
+		redraw = TRUE;
 	}
 	else if (curGuessLen < WORD_LENGTH)
 	{
 		curGuess[curGuessLen] = key;
 		curGuessLen++;
+		redraw = TRUE;
 	}
 	else
 	{
@@ -328,55 +455,63 @@ void Board::newGame()
 
 void Board::clear()
 {
+	redraw = TRUE;
 	curGuessLen = 0;
 }
 
 void Board::init()
 {
-	
+
 	curGuessLen = 0;
 
 	RGBColor grey;
 	grey.red = 119 << 8;
 	grey.green = 124 << 8;
 	grey.blue = 126 << 8;
-	
+
 	RGBColor yellow;
 	yellow.red = 205 << 8;
 	yellow.green = 178 << 8;
 	yellow.blue = 100 << 8;
-	
+
 	RGBColor green;
 	green.red = 93 << 8;
 	green.green = 170 << 8;
 	green.blue = 107 << 8;
-	
+
 	RGBColor lightGrey;
 	lightGrey.red = 211 << 8;
 	lightGrey.green = 214 << 8;
 	lightGrey.blue = 218 << 8;
-	
+
 	greyPixPat = NewPixPat();
 	yellowPixPat = NewPixPat();
 	greenPixPat = NewPixPat();
 	lightGreyPixPat = NewPixPat();
-	
+
 	MakeRGBPat(greyPixPat, &grey);
 	MakeRGBPat(yellowPixPat, &yellow);
 	MakeRGBPat(greenPixPat, &green);
 	MakeRGBPat(lightGreyPixPat, &lightGrey);
-	
+
 	max_key_rect_len = 0;
 	for (int i = 0; i < KEYBOARD_NUM_ROWS; i++)
 	{
 		int len = strlen(keyboard[i]);
 		key_rect_len[i] = len;
 		key_rects[i] = new Rect[len];
-		
+
 		if ( len > max_key_rect_len)
 		{
 			max_key_rect_len = len;
 		}
+	}
+
+	QDErr newWorldErr = NewGWorld(&offscreenWorld, 0, &window->portRect, NULL, NULL, 0);
+
+	if (newWorldErr != noErr) {
+		printf("Failed to create NewGWorld with err: %d\n", newWorldErr);
+		ExitToShell();
 	}
 }
 
@@ -386,12 +521,13 @@ void Board::cleanup()
 	DisposePixPat(yellowPixPat);
 	DisposePixPat(greenPixPat);
 	DisposePixPat(lightGreyPixPat);
+	DisposeGWorld(offscreenWorld);
 }
 
 void c2pstrcpy_cust(Str255 dest, const char* src)
 {
     unsigned char len = strlen(src);
-	
+
 	if(len >= 255)
 	{
 		len = 254;
@@ -403,7 +539,7 @@ void c2pstrcpy_cust(Str255 dest, const char* src)
 
 void Board::createScoreWindow(BOOL win)
 {
-	
+
 	WindowPtr window = GetNewCWindow(scoreWindow, nil, (WindowPtr) -1);
 	Str255 title;
 	c2pstrcpy_cust(title, "MacWords Score");
