@@ -17,6 +17,7 @@
 
 #include "board.hh"
 #include <Quickdraw.h>
+#include <QDOffscreen.h>
 #include <string.h>
 #include <stdio.h>
 #include <Sound.h>
@@ -42,8 +43,11 @@ Board::Board(WindowPtr w)
 
 	boardFontSize = 0;
 	keyboardFontSize = 0;
+	
+	offscreenWorld = NULL;
 
 	init();
+	clear();
 }
 
 BOOL Board::equalPortRect(Rect cmp)
@@ -59,19 +63,48 @@ Board::~Board()
 	cleanup();
 }
 
+Rect Board::calculateVisibleRect(Rect r)
+{
+	r.right -= 16;
+	r.bottom -= 16;
+	return r;
+}
+
+// Always draw the whole board in the offscreen GWorld
 void Board::draw_board()
 {
-	BOOL isNewPortRect = !equalPortRect(window->portRect);
-	boardSizeUpdated = isNewPortRect;
-	keyboardSizeUpdated = isNewPortRect;
-	short winWidth = window->portRect.right - window->portRect.left;
+	CGrafPtr origPort;
+	GDHandle origDev;
+	
+	GetGWorld(&origPort, &origDev);
+
+	Rect contentRect = calculateVisibleRect(window->portRect);
+
+	BOOL isNewPortRect = !equalPortRect(contentRect);
+	
+	if (isNewPortRect) {
+		isNewPortRect = updateGWorld(&contentRect);
+	}
+
+	if (isNewPortRect) {
+		boardSizeUpdated = isNewPortRect;
+		keyboardSizeUpdated = isNewPortRect;
+	}
+	
+	contentRect = offscreenWorld->portRect;
+	if (offscreenWorld) {
+		SetGWorld(offscreenWorld, NULL);
+		EraseRect(&offscreenWorld->portRect);
+	}
+
+	short winWidth = contentRect.right - contentRect.left;
 	
 	float buttonWidth = ((float)winWidth) / (((float)max_key_rect_len) + 1);
 	float spacerWidth = buttonWidth / (max_key_rect_len + 1);
 	
 	// Calculate space from the bottom
 	
-	short vertOffset = (window->portRect.bottom - window->portRect.top) - ((KEYBOARD_NUM_ROWS * (buttonWidth + spacerWidth) + spacerWidth));
+	short vertOffset = (contentRect.bottom - contentRect.top) - ((KEYBOARD_NUM_ROWS * (buttonWidth + spacerWidth) + spacerWidth));
 	
 	for (int row = 0; row < KEYBOARD_NUM_ROWS; row++)
 	{
@@ -183,6 +216,79 @@ void Board::draw_board()
 			}
 		}
 	}
+	
+	lastPortRect = contentRect;
+	SetGWorld(origPort, origDev);
+}
+
+void Board::resized()
+{
+	redraw = TRUE;
+}
+
+BOOL Board::canCreateGWorld(short width, short numRows)
+{
+	// Assume the existing GWorld's space can be reclaimed
+	Size existingSpace = 0;
+	if (offscreenWorld) {
+		existingSpace = GetHandleSize((Handle)offscreenWorld->portPixMap);
+	}
+	
+	PixMapHandle pixMap = ((CGrafPtr) window)->portPixMap;
+	HLock((Handle)pixMap);
+	short pixelSize = (*pixMap)->pixelSize;
+	HUnlock((Handle)pixMap);
+
+	int spaceNeeded = (( ( (width * (pixelSize / 8)) + 15) / 16) * 16) * numRows;
+	
+	Size maxGrow;
+	MaxMem(&maxGrow);
+	Size free = CompactMem(spaceNeeded);
+	
+	Size avail = free + existingSpace;
+	
+	return avail > spaceNeeded;
+}
+
+BOOL Board::updateGWorld(const Rect* updateRect)
+{
+	if (offscreenWorld) {
+		DisposeGWorld(offscreenWorld);
+		offscreenWorld = NULL;
+	}
+
+	//const Rect* windowRect = &(window->portRect);
+	
+	PixMapHandle pixMap = ((CGrafPtr) window)->portPixMap;
+	HLock((Handle)pixMap);
+	short pixelSize = (*pixMap)->pixelSize;
+	HUnlock((Handle)pixMap);
+	
+	short numRows = updateRect->bottom - updateRect->top;
+	short width = updateRect->right - updateRect->left;
+
+	int spaceNeeded = (( ( (width * (pixelSize / 8)) + 15) / 16) * 16) * numRows;
+
+	Size maxGrow;
+	MaxMem(&maxGrow);
+	Size free = CompactMem(spaceNeeded);
+	
+	printf("free: %d spaceNeeded %d\n", free, spaceNeeded);
+
+	if (spaceNeeded > free) {
+		return FALSE;
+		// Go back to the last working size
+	}
+
+	QDErr newWorldErr = NewGWorld(&offscreenWorld, 0, updateRect, NULL, NULL, 0);
+
+	if (newWorldErr != noErr) {
+		printf("Failed to UpdateGWorld with err: %d\n", newWorldErr);
+		ExitToShell();
+		return FALSE;
+	}
+
+	return TRUE;
 }
 
 void Board::draw_letter(char letter, Rect r, short* fontSize, BOOL* updateFontSize)
@@ -254,8 +360,26 @@ void Board::draw_letter(char letter, Rect r, short* fontSize, BOOL* updateFontSi
 void Board::draw()
 {
 	SetPort(window);
+	
+	if (redraw) 
+	{
+		draw_board();
+		redraw = FALSE;
+	}
+	
+	Rect contentRect = calculateVisibleRect(window->portRect);
+	
+	CWindowPtr cWindow = (CWindowPtr)window;
+	
 	EraseRect(&window->portRect);
-	draw_board();
+	DrawGrowIcon(window);
+	CopyBits((BitMap *)*(offscreenWorld->portPixMap),
+				(BitMap *)*(cWindow->portPixMap),
+				&offscreenWorld->portRect,
+				&contentRect,
+				srcCopy,
+				NULL);
+	printf("DrawGrowWindow\n");
 }
 
 void Board::process_key(char key)
@@ -296,6 +420,7 @@ void Board::process_key(char key)
 		{
 			SysBeep(1);
 		}
+		redraw = TRUE;
 	}
 	else if ( key == '\b')
 	{
@@ -308,11 +433,13 @@ void Board::process_key(char key)
 		{
 			SysBeep(1);
 		}
+		redraw = TRUE;
 	}
 	else if (curGuessLen < WORD_LENGTH)
 	{
 		curGuess[curGuessLen] = key;
 		curGuessLen++;
+		redraw = TRUE;
 	}
 	else
 	{
@@ -328,6 +455,7 @@ void Board::newGame()
 
 void Board::clear()
 {
+	redraw = TRUE;
 	curGuessLen = 0;
 }
 
@@ -378,6 +506,13 @@ void Board::init()
 			max_key_rect_len = len;
 		}
 	}
+	
+	QDErr newWorldErr = NewGWorld(&offscreenWorld, 0, &window->portRect, NULL, NULL, 0);
+
+	if (newWorldErr != noErr) {
+		printf("Failed to create NewGWorld with err: %d\n", newWorldErr);
+		ExitToShell();
+	}
 }
 
 void Board::cleanup()
@@ -386,6 +521,7 @@ void Board::cleanup()
 	DisposePixPat(yellowPixPat);
 	DisposePixPat(greenPixPat);
 	DisposePixPat(lightGreyPixPat);
+	DisposeGWorld(offscreenWorld);
 }
 
 void c2pstrcpy_cust(Str255 dest, const char* src)

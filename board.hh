@@ -38,12 +38,16 @@ class Board
 		void newGame();
 		void clear();
 		void createScoreWindow(BOOL win);
+		BOOL canCreateGWorld(short width, short numRows);
+		void resized();
 		~Board();
 		
 	private:
 		void init();
 		void cleanup();
 		void draw_board();
+		BOOL updateGWorld(const Rect* updateRect);
+		Rect calculateVisibleRect(Rect r);
 		
 		void draw_letter(char letter, Rect r, short *fontSize, BOOL* updateFontSize);
 		
@@ -69,6 +73,10 @@ class Board
 		short keyboardFontSize;
 		BOOL boardSizeUpdated;
 		BOOL keyboardSizeUpdated;
+		
+		BOOL redraw;
+		
+		GWorldPtr offscreenWorld;
 };
 
 #endif

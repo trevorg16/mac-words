@@ -51,11 +51,14 @@ static const short gameMenuClose = 2;
 QDGlobals qd;
 #endif
 
+short minHeight = 0;
+short minWidth = 0;
+
 void initialize();
 void mainLoop();
 void terminate();
 void processMouseMenuEvent(long action);
-void processKeyMenyEvent(char key);
+void processKeyMenuEvent(char key);
 void beginGame();
 void newGame(WindowPtr window);
 void clearEntry(WindowPtr window);
@@ -116,6 +119,36 @@ void mainLoop()
 					SelectWindow(clickedWindow);
 					DragWindow(clickedWindow, event.where, &qd.screenBits.bounds);					
 				}
+				else if (clickedPort == inGrow)
+				{
+					Rect r = {0};
+					r.top = minHeight;
+					r.bottom = 32767;
+					r.left = minWidth;
+					r.right = 32767;
+					
+					long newSize = GrowWindow(clickedWindow, event.where, &r);
+					printf("inGrow. window %x becomes %lx\n", clickedWindow, newSize);
+					
+					Board* b = (Board*) GetWRefCon((WindowPtr) clickedWindow);
+					
+					BOOL canResize = b->canCreateGWorld(LoWord(newSize), HiWord(newSize));
+					
+					if (newSize && canResize)
+					{
+						SetPort(clickedWindow);
+						
+						// could try to resize here or calculate if memory is sufficient
+						
+						SizeWindow(clickedWindow, LoWord(newSize), HiWord(newSize), false);
+						InvalRect(&clickedWindow->portRect);
+						b->resized();
+					}
+					else
+					{
+						SysBeep(1);
+					}
+				}
 				else if (clickedPort == inGoAway) {
 					if (TrackGoAway(clickedWindow, event.where)) {
 						if (clickedWindow)
@@ -149,6 +182,7 @@ void mainLoop()
 			}
 			else if (event.what == updateEvt)
 			{
+				printf("Doing an update event!!!!\n");
 				BeginUpdate((WindowPtr) event.message);
 				Board* b = (Board*) GetWRefCon((WindowPtr) event.message);
 				if (b == 0)
@@ -157,7 +191,11 @@ void mainLoop()
 				}
 				else if(b->type == BoardWindow)
 				{
+					RgnHandle rgn = NewRgn();
+					//GetWindowRegion((WindowPtr) event.message, kWindowUpdateRgn, rgn);
+					printf("The update region appears to be %x\n", rgn);
 					b->draw();
+					DisposeRgn(rgn);
 				}
 				else if(b->type == ScoreWindow)
 				{
@@ -171,7 +209,7 @@ void mainLoop()
 			{
 				if(((event.modifiers & cmdKey) != 0))
 				{
-					processKeyMenyEvent(tolower(LoWord(event.message)));
+					processKeyMenuEvent(tolower(LoWord(event.message)));
 				}
 				else
 				{
@@ -263,7 +301,7 @@ void processMouseMenuEvent(long action)
 }
 
 
-void processKeyMenyEvent(char key)
+void processKeyMenuEvent(char key)
 {
 	if (key == 'q')
 	{
@@ -347,6 +385,7 @@ void clearEntry(WindowPtr window)
 void beginGame()
 {
 	WindowPtr window = GetNewCWindow(mainWindow, nil, (WindowPtr) -1);
+	DrawGrowIcon(window);
 	Str255 title;
 	c2pstrcpy_cust(title, programName);
 	SetWTitle(window, title);
@@ -428,7 +467,7 @@ void drawAboutWindow(WindowPtr window)
 	
 	DrawString(writeString);
 	
-	c2pstrcpy_cust(writeString, " v1.0.1");
+	c2pstrcpy_cust(writeString, " v1.2.0");
 	
 	DrawString(writeString);
 	
@@ -440,7 +479,7 @@ void drawAboutWindow(WindowPtr window)
 	
 	SetPenState(&ps);
 	
-	c2pstrcpy_cust(writeString, "Copyright 2022 Trevor Gale");
+	c2pstrcpy_cust(writeString, "Copyright 2024 Trevor Gale");
 	
 	DrawString(writeString);
 	
