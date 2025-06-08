@@ -36,10 +36,10 @@ class Score
 {
 	public:
 	WindowType type;
-	
+
 	Score(WindowPtr w, BOOL win, char rounds, char* correctWord);
 	void draw();
-	
+
 	private:
 	WindowPtr window;
 	BOOL didWin;

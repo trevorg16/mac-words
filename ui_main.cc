@@ -87,7 +87,7 @@ void initialize()
 	InitMenus();
 	InitDialogs(nil);
 	InitCursor();
-	
+
 	aboutWindowOpen = FALSE;
 
 	FlushEvents(everyEvent, 0);
@@ -126,20 +126,20 @@ void mainLoop()
 					r.bottom = 32767;
 					r.left = minWidth;
 					r.right = 32767;
-					
+
 					long newSize = GrowWindow(clickedWindow, event.where, &r);
 					printf("inGrow. window %x becomes %lx\n", clickedWindow, newSize);
-					
+
 					Board* b = (Board*) GetWRefCon((WindowPtr) clickedWindow);
-					
+
 					BOOL canResize = b->canCreateGWorld(LoWord(newSize), HiWord(newSize));
-					
+
 					if (newSize && canResize)
 					{
 						SetPort(clickedWindow);
-						
+
 						// could try to resize here or calculate if memory is sufficient
-						
+
 						SizeWindow(clickedWindow, LoWord(newSize), HiWord(newSize), false);
 						InvalRect(&clickedWindow->portRect);
 						b->resized();
@@ -168,13 +168,13 @@ void mainLoop()
 						if(clickedWindow)
 						{
 							Board* b = (Board*) GetWRefCon((WindowPtr) clickedWindow);
-						
+
 							if (b == 0)
 							{
 								// Close the About Window on click
 								closeAboutWinow(clickedWindow);
 							}
-						
+
 							// Process the click event
 						}
 					}
@@ -202,7 +202,7 @@ void mainLoop()
 					Score* s = (Score*)b;
 					s->draw();
 				}
-				
+
 				EndUpdate((WindowPtr) event.message);
 			}
 			else if (event.what == keyDown)
@@ -350,12 +350,12 @@ void newGame(WindowPtr window)
 	{
 		return;
 	}
-	
+
 	if(board->type != BoardWindow)
 	{
 		return;
 	}
-	
+
 	board->newGame();
 	board->draw();
 }
@@ -377,7 +377,7 @@ void clearEntry(WindowPtr window)
 	{
 		return;
 	}
-	
+
 	board->clear();
 	board->draw();
 }
@@ -393,7 +393,7 @@ void beginGame()
 	Board* board = new Board(window);
 	SetWRefCon(window, (long) board);
 	SelectWindow(window);
-	
+
 	board->draw();
 }
 
@@ -406,7 +406,7 @@ WindowPtr createAboutWindow()
 
 	WindowPtr window = GetNewCWindow(aboutWindow, nil, (WindowPtr) -1);
 	SetWRefCon(window, (long) 0);
-	
+
 	aboutWindowOpen = TRUE;
 
 	return window;
@@ -420,7 +420,7 @@ void drawAboutWindow(WindowPtr window)
 	}
 
 	SetPort(window);
-	
+
 	RGBColor green;
 	green.red = 93 << 8;
 	green.green = 170 << 8;
@@ -428,29 +428,29 @@ void drawAboutWindow(WindowPtr window)
 
 	PixPatHandle greenPixPat = NewPixPat();
 	MakeRGBPat(greenPixPat, &green);
-	
+
 	Rect r = window->portRect;
-	
+
 	FillCRect(&r, greenPixPat);
-	
+
 	RGBColor white;
 	white.red = 255 << 8;
 	white.green = 255 << 8;
 	white.blue = 255 << 8;
-	
+
 	RGBForeColor(&white);
-	
+
 	short fontSize = 18;
 	PenState oldState;
 	GetPenState(&oldState);
-	
+
 	Style s = {0};
 	Str255 fontName;
-	
+
 	short fontFamily = 0;
 	c2pstrcpy_cust(fontName, "geneva");
 	GetFNum(fontName, &fontFamily);
-	
+
 	TextFont(fontFamily);
 	TextSize(fontSize);
 
@@ -459,39 +459,39 @@ void drawAboutWindow(WindowPtr window)
 	ps.pnLoc.h = window->portRect.left + 5;
 	ps.pnSize.v = 1;
 	ps.pnSize.h = 1;
-	
+
 	SetPenState(&ps);
-	
+
 	Str255 writeString;
 	c2pstrcpy_cust(writeString, programName);
-	
+
 	DrawString(writeString);
-	
+
 	c2pstrcpy_cust(writeString, " v1.2.0");
-	
+
 	DrawString(writeString);
-	
+
 	fontSize = 14;
 	TextSize(fontSize);
-	
+
 	ps.pnLoc.v = ((window->portRect.bottom - window->portRect.top) / 2) + window->portRect.top;
 	ps.pnLoc.h = window->portRect.left + 5;
-	
+
 	SetPenState(&ps);
-	
+
 	c2pstrcpy_cust(writeString, "Copyright 2024 Trevor Gale");
-	
+
 	DrawString(writeString);
-	
+
 	c2pstrcpy_cust(writeString, "under the GNU GPL");
-	
+
 	ps.pnLoc.v += 16;
 	ps.pnLoc.h = window->portRect.left + 5;
-	
+
 	SetPenState(&ps);
-	
+
 	DrawString(writeString);
-	
+
 	DisposePixPat(greenPixPat);
 }
 
@@ -501,7 +501,7 @@ void closeAboutWinow(WindowPtr window)
 	{
 		return;
 	}
-	
+
 	DisposeWindow(window);
 	aboutWindowOpen = FALSE;
 }
