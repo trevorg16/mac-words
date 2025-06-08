@@ -216,7 +216,7 @@ BOOL Engine::binSearch(int start, int end, char* wordList, char* word)
 			{
 				found = TRUE;
 				break;
-			}			
+			}
 		}
 	}
 	else

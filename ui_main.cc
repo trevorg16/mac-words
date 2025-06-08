@@ -117,7 +117,7 @@ void mainLoop()
 				else if (clickedPort == inDrag)
 				{
 					SelectWindow(clickedWindow);
-					DragWindow(clickedWindow, event.where, &qd.screenBits.bounds);					
+					DragWindow(clickedWindow, event.where, &qd.screenBits.bounds);
 				}
 				else if (clickedPort == inGrow)
 				{
